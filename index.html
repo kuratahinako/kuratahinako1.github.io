@@ -2,47 +2,35 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>WebAR Effect</title>
-    <!-- A-Frame と AR.js の読み込み -->
+    <title>WebAR Fixed Ratio</title>
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     <style>
-      /* タップを促す案内画面 */
       #overlay {
-        position: fixed;
-        top: 0; left: 0; width: 100%; height: 100%;
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         display: flex; justify-content: center; align-items: center;
-        background: rgba(0,0,0,0.4);
-        color: white;
-        font-family: sans-serif;
-        font-size: 20px;
-        font-weight: bold;
-        z-index: 9999;
-        text-align: center;
+        background: rgba(0,0,0,0.5); color: white; font-family: sans-serif;
+        font-size: 20px; z-index: 9999; text-align: center;
       }
     </style>
   </head>
   <body style="margin: 0; overflow: hidden;">
 
-    <!-- 画面タップで開始するための案内 -->
-    <div id="overlay">画面をタップして<br>エフェクトを開始</div>
+    <div id="overlay">画面をタップして開始</div>
 
     <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
       <a-assets>
-        <!-- 背景黒の動画ファイルを指定 -->
         <video id="ar-video" src="k.mp4" preload="auto" loop="true" crossorigin="anonymous" playsinline webkit-playsinline></video>
       </a-assets>
 
-      <!-- カメラの正面に動画を配置 -->
       <a-entity camera>
-        <a-video id="video-screen" 
-                 src="#ar-video" 
-                 width="2" height="1.1" 
-                 position="0 0 -2" 
-                 visible="false"
-                 material="transparent: true; blending: additive;">
-                 <!-- blending: additive が黒を透過させる設定です -->
-        </a-video>
+        <!-- 比率を維持するために、JavaScriptからgeometryを調整します -->
+        <a-entity id="video-screen" 
+                  geometry="primitive: plane; width: 2; height: 2;" 
+                  material="src: #ar-video; shader: flat; transparent: true; blending: additive; side: double;"
+                  position="0 0 -2" 
+                  visible="false">
+        </a-entity>
       </a-entity>
     </a-scene>
 
@@ -51,20 +39,36 @@
       const video = document.querySelector('#ar-video');
       const videoScreen = document.querySelector('#video-screen');
 
-      // スマホのタップ（画面接触）を検知
+      // 動画の比率を自動調整する関数
+      function adjustAspectRatio() {
+        const w = video.videoWidth;
+        const h = video.videoHeight;
+        const ratio = h / w;
+        // 横幅を2とした場合、高さを比率に合わせて計算
+        videoScreen.setAttribute('geometry', {
+          primitive: 'plane',
+          width: 2,
+          height: 2 * ratio
+        });
+      }
+
       window.addEventListener('touchstart', function () {
-        // 案内を消す
         overlay.style.display = 'none';
         
-        // 動画を表示して再生
+        // 動画のメタデータが読み込まれたら比率を調整
+        if (video.readyState >= 1) {
+          adjustAspectRatio();
+        } else {
+          video.addEventListener('loadedmetadata', adjustAspectRatio);
+        }
+
         videoScreen.setAttribute('visible', 'true');
         video.play();
         
-        // 10秒後（10000ミリ秒）にAmazonへ遷移
         setTimeout(function() {
           window.location.href = "https://www.amazon.co.jp/";
         }, 10000);
-      }, {once: true}); // 1回だけ実行
+      }, {once: true});
     </script>
   </body>
 </html>
