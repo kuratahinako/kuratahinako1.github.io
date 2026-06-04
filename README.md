@@ -1,0 +1,1 @@
+# kuratahinako1.github.io
