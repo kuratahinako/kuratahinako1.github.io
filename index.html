@@ -2,40 +2,69 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>WebAR Video Effect</title>
+    <title>WebAR Effect</title>
     <!-- A-Frame と AR.js の読み込み -->
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <style>
+      /* タップを促す案内画面 */
+      #overlay {
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        display: flex; justify-content: center; align-items: center;
+        background: rgba(0,0,0,0.4);
+        color: white;
+        font-family: sans-serif;
+        font-size: 20px;
+        font-weight: bold;
+        z-index: 9999;
+        text-align: center;
+      }
+    </style>
   </head>
   <body style="margin: 0; overflow: hidden;">
-    <a-scene embedded arjs>
+
+    <!-- 画面タップで開始するための案内 -->
+    <div id="overlay">画面をタップして<br>エフェクトを開始</div>
+
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
       <a-assets>
-        <!-- 表示したい動画ファイルを指定 (mp4推奨) -->
-        <video id="ar-video" src="k.webm" preload="auto" loop="true" crossorigin="anonymous" playsinline webkit-playsinline></video>
+        <!-- 背景黒の動画ファイルを指定 -->
+        <video id="ar-video" src="k.mp4" preload="auto" loop="true" crossorigin="anonymous" playsinline webkit-playsinline></video>
       </a-assets>
 
-      <!-- 
-        'hiro' マーカーを使用（AR.js標準のマーカー）
-        カメラがこのマーカーを捉えると動画が表示される
-      -->
-      <a-marker preset="hiro">
-        <a-video src="#ar-video" width="1.6" height="0.9" rotation="-90 0 0"></a-video>
-      </a-marker>
-
-      <a-entity camera></a-entity>
+      <!-- カメラの正面に動画を配置 -->
+      <a-entity camera>
+        <a-video id="video-screen" 
+                 src="#ar-video" 
+                 width="2" height="1.1" 
+                 position="0 0 -2" 
+                 visible="false"
+                 material="transparent: true; blending: additive;">
+                 <!-- blending: additive が黒を透過させる設定です -->
+        </a-video>
+      </a-entity>
     </a-scene>
 
     <script>
-      // 1. 画面をタップしたら動画を再生する（ブラウザの制限対策）
-      window.addEventListener('click', function () {
-        const video = document.querySelector('#ar-video');
+      const overlay = document.querySelector('#overlay');
+      const video = document.querySelector('#ar-video');
+      const videoScreen = document.querySelector('#video-screen');
+
+      // スマホのタップ（画面接触）を検知
+      window.addEventListener('touchstart', function () {
+        // 案内を消す
+        overlay.style.display = 'none';
+        
+        // 動画を表示して再生
+        videoScreen.setAttribute('visible', 'true');
         video.play();
         
-        // 2. 10秒後に別サイトへ遷移
+        // 10秒後（10000ミリ秒）にAmazonへ遷移
         setTimeout(function() {
-          window.location.href = "https://www.amazon.co.jp/s?k=%E9%98%B2%E7%81%BD+%E5%AE%B6%E5%85%B7+%E5%9B%BA%E5%AE%9A&language=ja_JP&adgrpid=1323814616398442&hvadid=82738655227204&hvbmt=bp&hvdev=c&hvlocphy=140224&hvnetw=o&hvqmt=p&hvtargid=kwd-82739786844809%3Aloc-96&hydadcr=27299_14815141&jp-ad-ap=0&mcid=15253043ae783f8b8796fcfadbb8b3f3&msclkid=866ee2dd5b31118d2efc88fd8835a9bd&tag=jpdeskstandse-22&ref=pd_sl_5wpcegjk4g_p"; // 移行先のURL
-        }, 10000); // 10000ミリ秒 = 10秒
-      });
+          window.location.href = "https://www.amazon.co.jp/";
+        }, 10000);
+      }, {once: true}); // 1回だけ実行
     </script>
   </body>
 </html>
