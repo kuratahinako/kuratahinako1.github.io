@@ -2,15 +2,15 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>WebAR Final Version</title>
+    <title>WebAR ChromaKey</title>
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     <script>
-      // 黒背景を切り抜く専用プログラム (Luma Key Shader)
-      AFRAME.registerShader('luma-key', {
+      // グリーンバックを消去する専用プログラム
+      AFRAME.registerShader('chromakey', {
         schema: {
           src: {type: 'map'},
-          threshold: {type: 'number', default: 0.05} // ここで黒の消え具合を調整
+          color: {type: 'color', default: '#00FF00'}
         },
         vertexShader: `
           varying vec2 vUv;
@@ -22,16 +22,15 @@
         fragmentShader: `
           varying vec2 vUv;
           uniform sampler2D src;
-          uniform float threshold;
+          uniform vec3 color;
           void main() {
-            vec4 color = texture2D(src, vUv);
-            // 明るさを計算
-            float brightness = dot(color.rgb, vec3(0.299, 0.587, 0.114));
-            // 明るさがしきい値より低ければ透明にする
-            if (brightness < threshold) {
-              discard;
+            vec4 texColor = texture2D(src, vUv);
+            // 緑色との差を計算
+            float diff = distance(texColor.rgb, color);
+            if (diff < 0.4) {
+              discard; // 緑に近い色は描画しない
             } else {
-              gl_FragColor = vec4(color.rgb, 1.0);
+              gl_FragColor = texColor;
             }
           }
         `
@@ -56,10 +55,13 @@
       </a-assets>
 
       <a-entity camera>
-        <!-- 独自シェーダー luma-key を使用 -->
+        <!-- 
+          width: 2; height: 1.1; は目安です。
+          JavaScriptが動画読み込み後に正しい比率に直します。
+        -->
         <a-entity id="video-screen" 
                   geometry="primitive: plane; width: 2; height: 1.1;" 
-                  material="shader: luma-key; src: #ar-video; transparent: true;"
+                  material="shader: chromakey; src: #ar-video; color: #00FF00; transparent: true;"
                   position="0 0 -2" 
                   visible="false">
         </a-entity>
@@ -71,7 +73,6 @@
       const video = document.querySelector('#ar-video');
       const videoScreen = document.querySelector('#video-screen');
 
-      // 比率を自動調整
       function adjustAspectRatio() {
         if (video.videoWidth > 0) {
           const ratio = video.videoHeight / video.videoWidth;
@@ -86,7 +87,6 @@
       window.addEventListener('touchstart', function () {
         overlay.style.display = 'none';
         
-        // 動画の読み込みを待ってから比率調整
         if (video.readyState >= 1) {
           adjustAspectRatio();
         } else {
@@ -96,9 +96,8 @@
         videoScreen.setAttribute('visible', 'true');
         video.play();
         
-        // 10秒後にAmazonへ
         setTimeout(function() {
-          window.location.href = "https://www.amazon.co.jp/";
+          window.location.href = "https://www.amazon.co.jp/s/?ie=UTF8&keywords=%E9%98%B2%E7%81%BD+%E5%AE%B6%E5%85%B7+%E3%81%AE+%E5%9B%BA%E5%AE%9A&index=aps&jp-ad-ap=0&tag=jpdeskstandse-22&ref=pd_sl_7ec245ju80_b&adgrpid=1319416604940486&hvadid=82463780725012&hvnetw=o&hvqmt=b&hvbmt=bb&hvdev=c&hvlocint=&hvlocphy=140224&hvtargid=kwd-82464961472559:loc-96&hydadcr=15815_13805625&mcid=3614b63fd30438ab81edec7b1503caad&language=ja_JP&msclkid=4c9bbda83a311f3afd51d788c48c18ed";
         }, 10000);
       }, {once: true});
     </script>
