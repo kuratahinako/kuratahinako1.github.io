@@ -1,99 +1,85 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>WebAR Final Fix</title>
-    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-    <script>
-      // 黒背景を切り抜くための確実なプログラム
-      AFRAME.registerShader('cutout', {
-        schema: { src: {type: 'map'} },
-        vertexShader: `
-          varying vec2 vUv;
-          void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: `
-          varying vec2 vUv;
-          uniform sampler2D src;
-          void main() {
-            vec4 color = texture2D(src, vUv);
-            // RGBの合計が低い（黒い）部分を完全に消去
-            if (color.r < 0.1 && color.g < 0.1 && color.b < 0.1) {
-              discard;
-            }
-            gl_FragColor = vec4(color.rgb, 1.0);
-          }
-        `
-      });
-    </script>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WebAR Simple</title>
     <style>
-      #overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        display: flex; justify-content: center; align-items: center;
-        background: rgba(0,0,0,0.7); color: white; font-family: sans-serif;
-        font-size: 20px; z-index: 9999; text-align: center;
-      }
+        body { margin: 0; overflow: hidden; background: #000; }
+        
+        /* 背面のカメラ映像 */
+        #webcam {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover; z-index: 1;
+        }
+
+        /* 前面の動画エフェクト */
+        #effect-video {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: contain; /* 比率を維持して画面に収める */
+            z-index: 2;
+            display: none; /* 最初は隠す */
+            /* 黒を透過させ、色をハッキリさせる設定 */
+            mix-blend-mode: lighten;
+            filter: contrast(1.2) brightness(1.2);
+        }
+
+        /* 案内画面 */
+        #overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); color: white;
+            display: flex; justify-content: center; align-items: center;
+            font-family: sans-serif; font-size: 20px; z-index: 10;
+            text-align: center;
+        }
     </style>
-  </head>
-  <body style="margin: 0; overflow: hidden;">
+</head>
+<body>
 
-    <div id="overlay">画面をタップして開始</div>
-
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
-      <a-assets>
-        <video id="ar-video" src="k.mp4" preload="auto" loop="true" crossorigin="anonymous" playsinline webkit-playsinline></video>
-      </a-assets>
-
-      <a-entity camera>
-        <!-- shader: cutout を使って黒を消します -->
-        <a-entity id="video-screen" 
-                  geometry="primitive: plane; width: 2; height: 1.1;" 
-                  material="shader: cutout; src: #ar-video; transparent: true;"
-                  position="0 0 -2" 
-                  visible="false">
-        </a-entity>
-      </a-entity>
-    </a-scene>
+    <div id="overlay">タップして開始</div>
+    
+    <!-- カメラ映像用のビデオ -->
+    <video id="webcam" autoplay playsinline></video>
+    
+    <!-- エフェクト用のビデオ（黒背景のk.mp4） -->
+    <video id="effect-video" src="k.mp4" loop playsinline></video>
 
     <script>
-      const overlay = document.querySelector('#overlay');
-      const video = document.querySelector('#ar-video');
-      const videoScreen = document.querySelector('#video-screen');
+        const overlay = document.querySelector('#overlay');
+        const webcam = document.querySelector('#webcam');
+        const effectVideo = document.querySelector('#effect-video');
 
-      // 比率を計算して適用する関数
-      function fixRatio() {
-        if (video.videoWidth > 0) {
-          const ratio = video.videoHeight / video.videoWidth;
-          videoScreen.setAttribute('geometry', {
-            primitive: 'plane',
-            width: 2,
-            height: 2 * ratio
-          });
-        }
-      }
-
-      window.addEventListener('touchstart', function () {
-        overlay.style.display = 'none';
-        
-        // 動画の準備ができていれば比率を直す
-        if (video.readyState >= 2) {
-          fixRatio();
-        } else {
-          video.addEventListener('loadeddata', fixRatio);
+        // 1. カメラを起動する
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" },
+                    audio: false
+                });
+                webcam.srcObject = stream;
+            } catch (err) {
+                alert("カメラの起動に失敗しました: " + err);
+            }
         }
 
-        videoScreen.setAttribute('visible', 'true');
-        video.play();
-        
-        // 10秒後にAmazonへ遷移
-        setTimeout(function() {
-          window.location.href = "https://www.amazon.co.jp/";
-        }, 10000);
-      }, {once: true});
+        // 2. タップした時の処理
+        window.addEventListener('touchstart', function() {
+            if (overlay.style.display === 'none') return;
+            
+            overlay.style.display = 'none';
+            effectVideo.style.display = 'block';
+            
+            // 動画再生
+            effectVideo.play();
+
+            // 10秒後にAmazonへ
+            setTimeout(() => {
+                window.location.href = "https://www.amazon.co.jp/";
+            }, 10000);
+        }, {once: true});
+
+        // 最初にカメラだけ起動しておく
+        startCamera();
     </script>
-  </body>
+</body>
 </html>
