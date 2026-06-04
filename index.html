@@ -2,33 +2,9 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>WebAR Vivid Transparent</title>
+    <title>WebAR Vivid Fix</title>
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-    <script>
-      // 黒い部分を「切り抜く」ための専用プログラム
-      AFRAME.registerShader('transparent-video', {
-        schema: { src: {type: 'map'} },
-        vertexShader: `
-          varying vec2 vUv;
-          void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: `
-          varying vec2 vUv;
-          uniform sampler2D src;
-          void main() {
-            vec4 color = texture2D(src, vUv);
-            // 色の明るさを計算。真っ黒に近い場合は描画をスキップ（切り抜き）
-            float brightness = max(color.r, max(color.g, color.b));
-            if (brightness < 0.1) { discard; }
-            gl_FragColor = color;
-          }
-        `
-      });
-    </script>
     <style>
       #overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -44,20 +20,25 @@
 
     <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
       <a-assets>
-        <video id="ar-video" src="k.mp4" preload="auto" loop="true" crossorigin="anonymous" playsinline webkit-playsinline></video>
+        <!-- 
+          autoplay, muted を入れることで読み込みをスムーズにします 
+          (再生自体はクリック後に行われます)
+        -->
+        <video id="ar-video" src="k.mp4" preload="auto" loop="true" crossorigin="anonymous" playsinline webkit-playsinline muted></video>
       </a-assets>
 
       <a-entity camera>
         <!-- 
-          material="shader: transparent-video; ..." で黒を切り抜きます。
-          width: 2; に設定（前回のサイズ感）
+          material="shader: flat; ..." で色を鮮やかに保ちます。
+          transparent: true と、JavaScript側での黒カット処理を組み合わせます。
         -->
-        <a-entity id="video-screen" 
-                  geometry="primitive: plane; width: 2; height: 2;" 
-                  material="shader: transparent-video; src: #ar-video;"
-                  position="0 0 -2" 
-                  visible="false">
-        </a-entity>
+        <a-video id="video-screen" 
+                 src="#ar-video" 
+                 width="2" height="1.1" 
+                 position="0 0 -2" 
+                 visible="false"
+                 material="shader: flat; transparent: true; side: double;">
+        </a-video>
       </a-entity>
     </a-scene>
 
@@ -66,30 +47,43 @@
       const video = document.querySelector('#ar-video');
       const videoScreen = document.querySelector('#video-screen');
 
-      // 比率を自動調整
+      // 比率を自動調整する関数
       function adjustAspectRatio() {
-        const w = video.videoWidth;
-        const h = video.videoHeight;
-        const ratio = h / w;
-        videoScreen.setAttribute('geometry', {
-          primitive: 'plane',
-          width: 2,
-          height: 2 * ratio
-        });
+        if (video.videoWidth > 0) {
+          const w = video.videoWidth;
+          const h = video.videoHeight;
+          const ratio = h / w;
+          videoScreen.setAttribute('width', 2);
+          videoScreen.setAttribute('height', 2 * ratio);
+        }
       }
 
       window.addEventListener('touchstart', function () {
         overlay.style.display = 'none';
         
+        // 比率調整を実行
         if (video.readyState >= 1) {
           adjustAspectRatio();
         } else {
           video.addEventListener('loadedmetadata', adjustAspectRatio);
         }
 
+        // 動画を表示して再生
         videoScreen.setAttribute('visible', 'true');
-        video.play();
         
+        // iPhone対策：ミュートを解除してから再生
+        video.muted = false;
+        video.play();
+
+        // 【重要】黒い部分を「透明」として扱うための特殊設定
+        // 標準機能を使って、色の明るさが低い部分を描画しないようにします
+        const mesh = videoScreen.getObject3D('mesh');
+        if (mesh) {
+          mesh.material.alphaTest = 0.1; // 0.1以下の明るさをカット
+          mesh.material.needsUpdate = true;
+        }
+        
+        // 10秒後に遷移
         setTimeout(function() {
           window.location.href = "https://www.amazon.co.jp/";
         }, 10000);
