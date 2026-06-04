@@ -3,24 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WebAR Final Solution</title>
+    <title>WebAR Final Bottom-Aligned</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-        /* カメラ映像（背面） */
-        #webcam { position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
-        /* 動画を表示するキャンバス（前面） */
-        #output-canvas { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; width: 100%; height: auto; max-height: 100%; }
+        
+        /* 背面のカメラ映像 */
+        #webcam { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            object-fit: cover; z-index: 1; 
+        }
+
+        /* 動画を表示するキャンバス（前面・下詰め設定） */
+        #output-canvas { 
+            position: fixed; 
+            bottom: 0;           /* 下端に合わせる */
+            left: 50%; 
+            transform: translateX(-50%); /* 横方向だけ中央寄せ */
+            z-index: 2; 
+            width: 100%; 
+            height: auto; 
+            max-height: 100%; 
+        }
+
         /* 案内画面 */
-        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: flex; justify-content: center; align-items: center; z-index: 10; font-size: 20px; text-align: center; }
+        #overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.8); color: white; 
+            display: flex; justify-content: center; align-items: center; 
+            z-index: 10; font-size: 20px; text-align: center; 
+        }
     </style>
 </head>
 <body>
 
     <div id="overlay">タップして開始</div>
     <video id="webcam" autoplay playsinline></video>
-    <!-- 元の動画（隠しておく） -->
     <video id="effect-video" src="k.mp4" loop playsinline muted style="display:none;"></video>
-    <!-- 加工後の動画を表示する場所 -->
     <canvas id="output-canvas"></canvas>
 
     <script>
@@ -30,7 +48,6 @@
         const canvas = document.querySelector('#output-canvas');
         const ctx = canvas.getContext('2d');
 
-        // カメラ起動
         async function initCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
@@ -39,44 +56,33 @@
                 });
                 webcam.srcObject = stream;
             } catch (err) {
-                alert("カメラの起動に失敗しました。設定を確認してください。");
+                alert("カメラの起動に失敗しました。");
             }
         }
 
-        // 動画の黒背景を消してキャンバスに描画するループ処理
         function processVideo() {
             if (video.paused || video.ended) return;
 
-            // キャンバスのサイズを動画に合わせる（初回のみ）
             if (canvas.width !== video.videoWidth) {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
             }
 
-            // 1. 動画の現在のフレームをキャンバスに描く
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-            // 2. 描いた映像のピクセルデータを取得
             const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const length = frame.data.length;
 
-            // 3. 全ピクセルをチェックして黒（暗い色）を透明にする
             for (let i = 0; i < length; i += 4) {
                 const r = frame.data[i];
                 const g = frame.data[i + 1];
                 const b = frame.data[i + 2];
-                
-                // RGBの合計が低い（黒に近い）場合、透明度(Alpha)を0にする
-                // この 80 という数字を大きくすると、より強く黒を消します
+                // 黒判定（必要に応じて 80 の数字を調整してください）
                 if (r + g + b < 80) {
                     frame.data[i + 3] = 0;
                 }
             }
 
-            // 4. 加工したデータをキャンバスに戻す
             ctx.putImageData(frame, 0, 0);
-
-            // 次のフレームを予約
             requestAnimationFrame(processVideo);
         }
 
@@ -88,9 +94,8 @@
             video.play();
             processVideo();
 
-            // 10秒後に遷移
             setTimeout(() => {
-                window.location.href = "https://www.amazon.co.jp/";
+                window.location.href = "https://www.amazon.co.jp/s/?ie=UTF8&keywords=%E9%98%B2%E7%81%BD+%E5%AE%B6%E5%85%B7+%E3%81%AE+%E5%9B%BA%E5%AE%9A&index=aps&jp-ad-ap=0&tag=jpdeskstandse-22&ref=pd_sl_7ec245ju80_b&adgrpid=1319416604940486&hvadid=82463780725012&hvnetw=o&hvqmt=b&hvbmt=bb&hvdev=c&hvlocint=&hvlocphy=140224&hvtargid=kwd-82464961472559:loc-96&hydadcr=15815_13805625&mcid=3614b63fd30438ab81edec7b1503caad&language=ja_JP&msclkid=4c9bbda83a311f3afd51d788c48c18ed";
             }, 10000);
         }, {once: true});
 
