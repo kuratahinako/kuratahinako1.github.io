@@ -2,100 +2,93 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>WebAR ChromaKey</title>
+    <title>WebAR Final Fix</title>
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-    <script>
-      // グリーンバックを消去する専用プログラム
-      AFRAME.registerShader('chromakey', {
-        schema: {
-          src: {type: 'map'},
-          color: {type: 'color', default: '#00FF00'}
-        },
-        vertexShader: `
-          varying vec2 vUv;
-          void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: `
-          varying vec2 vUv;
-          uniform sampler2D src;
-          uniform vec3 color;
-          void main() {
-            vec4 texColor = texture2D(src, vUv);
-            // 緑色との差を計算
-            float diff = distance(texColor.rgb, color);
-            if (diff < 0.4) {
-              discard; // 緑に近い色は描画しない
-            } else {
-              gl_FragColor = texColor;
-            }
-          }
-        `
-      });
-    </script>
     <style>
       #overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        display: flex; justify-content: center; align-items: center;
-        background: rgba(0,0,0,0.7); color: white; font-family: sans-serif;
-        font-size: 20px; z-index: 9999; text-align: center;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        background: rgba(0,0,0,0.8); color: white; font-family: sans-serif; z-index: 9999;
       }
+      #status { margin-top: 20px; font-size: 14px; color: #ff0; }
     </style>
   </head>
   <body style="margin: 0; overflow: hidden;">
 
-    <div id="overlay">画面をタップして開始</div>
+    <div id="overlay">
+      <div style="font-size: 24px;">画面をタップして開始</div>
+      <div id="status">動画を読み込み中...</div>
+    </div>
 
     <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
-      <a-assets>
-        <video id="ar-video" src="k.mp4" preload="auto" loop="true" crossorigin="anonymous" playsinline webkit-playsinline></video>
+      <a-assets timeout="10000">
+        <!-- 読み込みを確実にするため muted で開始 -->
+        <video id="ar-video" src="k.mp4" preload="auto" loop="true" crossorigin="anonymous" playsinline webkit-playsinline muted></video>
       </a-assets>
 
       <a-entity camera>
         <!-- 
-          width: 2; height: 1.1; は目安です。
-          JavaScriptが動画読み込み後に正しい比率に直します。
+          shader: flat (色をハッキリさせる) 
+          transparent: true (透明を有効にする)
         -->
-        <a-entity id="video-screen" 
-                  geometry="primitive: plane; width: 2; height: 1.1;" 
-                  material="shader: chromakey; src: #ar-video; color: #00FF00; transparent: true;"
-                  position="0 0 -2" 
-                  visible="false">
-        </a-entity>
+        <a-video id="video-screen" 
+                 src="#ar-video" 
+                 width="2" height="1.1" 
+                 position="0 0 -1" 
+                 visible="false"
+                 material="shader: flat; transparent: true;">
+        </a-video>
       </a-entity>
     </a-scene>
 
     <script>
       const overlay = document.querySelector('#overlay');
+      const status = document.querySelector('#status');
       const video = document.querySelector('#ar-video');
       const videoScreen = document.querySelector('#video-screen');
 
-      function adjustAspectRatio() {
-        if (video.videoWidth > 0) {
-          const ratio = video.videoHeight / video.videoWidth;
-          videoScreen.setAttribute('geometry', {
-            primitive: 'plane',
-            width: 2,
-            height: 2 * ratio
-          });
-        }
-      }
+      // 動画の準備ができたらメッセージを変える
+      video.addEventListener('canplaythrough', () => {
+        status.innerText = "動画の準備完了！タップしてください。";
+      });
 
       window.addEventListener('touchstart', function () {
+        status.innerText = "再生を試みています...";
+        
+        // 1. 案内を消す
         overlay.style.display = 'none';
         
-        if (video.readyState >= 1) {
-          adjustAspectRatio();
-        } else {
-          video.addEventListener('loadedmetadata', adjustAspectRatio);
-        }
-
+        // 2. 動画を表示状態にする
         videoScreen.setAttribute('visible', 'true');
-        video.play();
         
+        // 3. ミュート解除して再生
+        video.muted = false;
+        const playPromise = video.play();
+
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            // 再生成功：ここでグリーンバックを消す設定を適用
+            const mesh = videoScreen.getObject3D('mesh');
+            if (mesh) {
+              mesh.material.onBeforeCompile = (shader) => {
+                shader.fragmentShader = shader.fragmentShader.replace(
+                  'gl_FragColor = color;',
+                  `
+                  // 緑色の判定（クロマキー）
+                  float greenDist = distance(color.rgb, vec3(0.0, 1.0, 0.0));
+                  if (greenDist < 0.5) { discard; }
+                  gl_FragColor = color;
+                  `
+                );
+              };
+            }
+          }).catch(e => {
+            alert("再生エラー: " + e);
+          });
+        }
+        
+        // 4. 10秒後に遷移
         setTimeout(function() {
           window.location.href = "https://www.amazon.co.jp/s/?ie=UTF8&keywords=%E9%98%B2%E7%81%BD+%E5%AE%B6%E5%85%B7+%E3%81%AE+%E5%9B%BA%E5%AE%9A&index=aps&jp-ad-ap=0&tag=jpdeskstandse-22&ref=pd_sl_7ec245ju80_b&adgrpid=1319416604940486&hvadid=82463780725012&hvnetw=o&hvqmt=b&hvbmt=bb&hvdev=c&hvlocint=&hvlocphy=140224&hvtargid=kwd-82464961472559:loc-96&hydadcr=15815_13805625&mcid=3614b63fd30438ab81edec7b1503caad&language=ja_JP&msclkid=4c9bbda83a311f3afd51d788c48c18ed";
         }, 10000);
