@@ -3,59 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>WebAR Vivid Final</title>
+    <title>WebAR Final Solution</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; }
-        
-        /* 背面のカメラ映像 */
-        #webcam {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            object-fit: cover; z-index: 1;
-        }
-
-        /* 前面の動画エフェクト */
-        #effect-video {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            object-fit: contain; /* 比率を維持 */
-            z-index: 2;
-            display: none;
-            /* 合成モードをやめて、下のSVGフィルタを適用 */
-            filter: url(#luma-extract);
-        }
-
-        #overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); color: white;
-            display: flex; justify-content: center; align-items: center;
-            font-family: sans-serif; font-size: 20px; z-index: 10;
-        }
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        /* カメラ映像（背面） */
+        #webcam { position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+        /* 動画を表示するキャンバス（前面） */
+        #output-canvas { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 2; width: 100%; height: auto; max-height: 100%; }
+        /* 案内画面 */
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: flex; justify-content: center; align-items: center; z-index: 10; font-size: 20px; text-align: center; }
     </style>
 </head>
 <body>
 
-    <!-- 黒を透明にする魔法のフィルター定義 -->
-    <svg style="position: absolute; width: 0; height: 0;">
-      <filter id="luma-extract">
-        <!-- 黒（暗い部分）を透明度に変換する設定 -->
-        <feColorMatrix type="matrix" 
-          values="1 0 0 0 0
-                  0 1 0 0 0
-                  0 0 1 0 0
-                  1.5 1.5 1.5 0 -0.6" />
-      </filter>
-    </svg>
-
     <div id="overlay">タップして開始</div>
-    
     <video id="webcam" autoplay playsinline></video>
-    <video id="effect-video" src="k.mp4" loop playsinline></video>
+    <!-- 元の動画（隠しておく） -->
+    <video id="effect-video" src="k.mp4" loop playsinline muted style="display:none;"></video>
+    <!-- 加工後の動画を表示する場所 -->
+    <canvas id="output-canvas"></canvas>
 
     <script>
         const overlay = document.querySelector('#overlay');
         const webcam = document.querySelector('#webcam');
-        const effectVideo = document.querySelector('#effect-video');
+        const video = document.querySelector('#effect-video');
+        const canvas = document.querySelector('#output-canvas');
+        const ctx = canvas.getContext('2d');
 
-        async function startCamera() {
+        // カメラ起動
+        async function initCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: "environment" },
@@ -63,22 +39,62 @@
                 });
                 webcam.srcObject = stream;
             } catch (err) {
-                alert("カメラの起動に失敗しました");
+                alert("カメラの起動に失敗しました。設定を確認してください。");
             }
+        }
+
+        // 動画の黒背景を消してキャンバスに描画するループ処理
+        function processVideo() {
+            if (video.paused || video.ended) return;
+
+            // キャンバスのサイズを動画に合わせる（初回のみ）
+            if (canvas.width !== video.videoWidth) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+            }
+
+            // 1. 動画の現在のフレームをキャンバスに描く
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // 2. 描いた映像のピクセルデータを取得
+            const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const length = frame.data.length;
+
+            // 3. 全ピクセルをチェックして黒（暗い色）を透明にする
+            for (let i = 0; i < length; i += 4) {
+                const r = frame.data[i];
+                const g = frame.data[i + 1];
+                const b = frame.data[i + 2];
+                
+                // RGBの合計が低い（黒に近い）場合、透明度(Alpha)を0にする
+                // この 80 という数字を大きくすると、より強く黒を消します
+                if (r + g + b < 80) {
+                    frame.data[i + 3] = 0;
+                }
+            }
+
+            // 4. 加工したデータをキャンバスに戻す
+            ctx.putImageData(frame, 0, 0);
+
+            // 次のフレームを予約
+            requestAnimationFrame(processVideo);
         }
 
         window.addEventListener('touchstart', function() {
             if (overlay.style.display === 'none') return;
             overlay.style.display = 'none';
-            effectVideo.style.display = 'block';
-            effectVideo.play();
 
+            video.muted = false;
+            video.play();
+            processVideo();
+
+            // 10秒後に遷移
             setTimeout(() => {
                 window.location.href = "https://www.amazon.co.jp/";
             }, 10000);
         }, {once: true});
 
-        startCamera();
+        initCamera();
     </script>
 </body>
 </html>
